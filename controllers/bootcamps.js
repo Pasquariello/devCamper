@@ -12,17 +12,68 @@ const geocoder = require('../utils/geocoder');
 exports.getBootcamps = asyncHandler(async (req, res, next) => {
     let query;
 
-    let queryStr = JSON.stringify(req.query);
-    
-    queryStr = queryStr.replace(/\b(gt|gte|lt|lte|in)\b/g, match => `$${match}`);
-   
-    query = Bootcamp.find(JSON.parse(queryStr));
+    // Copy req.query and exclude certain fields
+    const { select, sort, page, limit, ...reqQuery } = req.query;
 
+    // Create query string
+    let queryStr = JSON.stringify(reqQuery);
+    
+    // Create operators ($gt, $gte, etc)
+    queryStr = queryStr.replace(/\b(gt|gte|lt|lte|in)\b/g, match => `$${match}`);
+
+    // Finding Resource
+    query = Bootcamp.find(JSON.parse(queryStr)).populate('courses');
+    // Select fields
+
+    if (select) {
+        console.log('select', select)
+        const fields = req.query.select.split(',').join(' ');
+        query = query.select(fields);
+    }
+
+    if (req.query.sort) {
+        const sortBy = req.query.sort.split(',').join(' ');
+        query = query.sort(sortBy);
+    } else {
+        query = query.sort('-createdAt');
+    }
+
+    // Pagination 
+    const queryPage = parseInt(page, 10) || 1;
+    const queryLimit = parseInt(limit, 10) || 25;
+    const startIndex = (queryPage - 1) * queryLimit;
+    const endIndex = (queryPage * queryLimit);
+    const total = await Bootcamp.countDocuments();
+
+    query = query.skip(startIndex).limit(queryLimit);
+
+    // Executing query
     const bootcamps = await query;
+
+    // Pagination Result
+    const pagination = {
+        total
+    };
+
+    if (endIndex < total){
+        pagination.next = {
+            page: queryPage + 1,
+            limit: queryLimit
+        }
+    }
+
+    if (startIndex > 0){
+        pagination.prev = {
+            page: page - 1, 
+            limit: queryLimit
+        }
+    }
+    
 
     res.status(200).json({ 
         success: true, 
         count: bootcamps.length,
+        pagination,
         data: bootcamps,
     });  
 });
@@ -91,7 +142,7 @@ exports.updateBootcamp = asyncHandler( async (req, res, next) => {
 // @access  Private
 exports.deleteBootcamp = asyncHandler( async (req, res, next) => {
     const id = req.params.id;
-    const bootcamp = await Bootcamp.findByIdAndDelete(req.params.id);
+    const bootcamp = await Bootcamp.findById(req.params.id);
 
     if (!bootcamp) {
         // use return here to make sure that in this 
@@ -99,6 +150,8 @@ exports.deleteBootcamp = asyncHandler( async (req, res, next) => {
         return next(new ErrorResponse(`Bootcamp not found with id of ${id}`, 404));
 
     }
+    // This will trigger middleware to cascade delete all courses associated to bootcamp
+    bootcamp.remove();
 
     res.status(200).json({ 
         success: true, 

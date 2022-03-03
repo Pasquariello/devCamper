@@ -13,6 +13,8 @@ connectDB();
 
 // Route files
 const bootcamps = require('./routes/bootcamps');
+const courses = require('./routes/courses');
+
 
 // initialize app with express
 const app = express();
@@ -22,6 +24,12 @@ app.use(express.json());
 
 // Mount routers
 app.use('/api/v1/bootcamps', bootcamps);
+app.use('/api/v1/courses', courses);
+
+app.use('/', (req, res) => {
+    res.status(200).send("Not Supported")
+})
+
 
 //Middleware
 //dev logging
@@ -42,7 +50,7 @@ const server = app.listen(
     console.log(`Server running in ${process.env.NODE_ENV} on port: ${PORT}`.rainbow.bold)
 );
 
-// Handle unhandled promis rejection
+// Handle unhandled promise rejection
 process.on('unhandledRejection', (err, promise) => {
     console.log(`Error: ${err.message}`.red);
     // Close server & Exit process
